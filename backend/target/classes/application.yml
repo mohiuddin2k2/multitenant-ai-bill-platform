@@ -1,0 +1,97 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /api/v1
+
+spring:
+  application:
+    name: multi-tenant-ai-bill-platform
+  profiles:
+    active: dev
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/billplatform_db}
+    username: ${SPRING_DATASOURCE_USERNAME:bill_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:bill_secure_password123}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
+      max-lifetime: 1200000
+
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        jdbc:
+          batch_size: 25
+        order_inserts: true
+        order_updates: true
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+
+  data:
+    redis:
+      host: ${SPRING_REDIS_HOST:localhost}
+      port: ${SPRING_REDIS_PORT:6379}
+      timeout: 2000ms
+
+  cache:
+    type: redis
+    redis:
+      time-to-live: 600000 # 10 minutes cache
+      cache-null-values: false
+
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY:mock-key-for-local-development}
+      chat:
+        options:
+          model: ${OPENAI_MODEL:gpt-4o-mini}
+          temperature: 0.1
+
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 25MB
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+    expiration-ms: 86400000 # 24 hours
+  rate-limiting:
+    enabled: true
+    capacity: 60
+    tokens-refill: 60
+    duration-seconds: 60
+  ai:
+    mock-fallback-enabled: true
+    cost-per-1k-tokens: 0.00015
+  upload:
+    dir: ${UPLOAD_DIR:./uploads}
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [Tenant:%X{tenantId:-GLOBAL}] %-5level %logger{36} - %msg%n"
+  level:
+    root: INFO
+    com.platform.billprocessing: DEBUG
+    org.hibernate.SQL: WARN
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: method
+  api-docs:
+    path: /v3/api-docs
+
