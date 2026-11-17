@@ -62,6 +62,6 @@ services:
         destination: /index.html
     envVars:
       - key: VITE_API_BASE_URL
-        value: https://billflow-api.onrender.com/api/v1
+        value: https://billflow-api-0m4q.onrender.com/api/v1
       - key: VITE_DEMO_MODE
         value: "false"
