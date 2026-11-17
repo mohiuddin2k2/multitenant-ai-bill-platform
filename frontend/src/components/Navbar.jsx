@@ -33,6 +33,10 @@ export default function Navbar() {
         return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
       case 'APPROVER':
         return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
+      case 'ASSISTANT_OFFICER':
+        return 'bg-sky-500/20 text-sky-300 border-sky-500/30';
+      case 'HIGHER_OFFICER':
+        return 'bg-purple-500/20 text-purple-300 border-purple-500/30';
       case 'CLERK':
         return 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30';
       default:

@@ -21,6 +21,10 @@ public interface BillRepository extends JpaRepository<Bill, Long>, JpaSpecificat
 
     Page<Bill> findByTenantIdAndStatus(Long tenantId, BillStatus status, Pageable pageable);
 
+    Page<Bill> findByTenantIdAndAssignedToUserId(Long tenantId, Long assignedToUserId, Pageable pageable);
+
+    Page<Bill> findByTenantIdAndAssignedToUserIdAndStatus(Long tenantId, Long assignedToUserId, BillStatus status, Pageable pageable);
+
     Optional<Bill> findByIdAndTenantId(Long id, Long tenantId);
 
     long countByTenantId(Long tenantId);

@@ -10,9 +10,10 @@ import UploadBill from './pages/UploadBill';
 import NaturalLanguageSearch from './pages/NaturalLanguageSearch';
 import HierarchyView from './pages/HierarchyView';
 import QuotasView from './pages/QuotasView';
+import UserManagement from './pages/UserManagement';
 
 function ProtectedLayout() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isAdmin } = useAuth();
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -31,6 +32,7 @@ function ProtectedLayout() {
             <Route path="/search" element={<NaturalLanguageSearch />} />
             <Route path="/hierarchy" element={<HierarchyView />} />
             <Route path="/quotas" element={<QuotasView />} />
+            {isAdmin && <Route path="/users" element={<UserManagement />} />}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

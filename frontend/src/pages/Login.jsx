@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { ShieldCheck, UserCheck, ArrowRight, Lock, Mail } from 'lucide-react';
+import { ShieldCheck, UserCheck, ArrowRight, Lock, Mail, Eye, EyeOff } from 'lucide-react';
 
 export default function Login() {
-  const [username, setUsername] = useState('clerk_north@shaksham.com');
-  const [password, setPassword] = useState('password123');
+  const showDemoLogins = import.meta.env.VITE_DEMO_MODE !== 'false';
+  const [username, setUsername] = useState('admin@shaksham.com');
+  const [password, setPassword] = useState(showDemoLogins ? 'Password@123' : '');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const { login, loading } = useAuth();
   const navigate = useNavigate();
@@ -23,9 +25,9 @@ export default function Login() {
 
   const handleQuickLogin = async (userEmail) => {
     setUsername(userEmail);
-    setPassword('password123');
+    setPassword('Password@123');
     try {
-      await login(userEmail, 'password123');
+      await login(userEmail, 'Password@123');
       navigate('/');
     } catch (err) {
       setError(err.response?.data?.message || 'Quick login failed');
@@ -72,7 +74,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-950 via-slate-950 to-black">
-      <div className="w-full max-w-4xl grid md:grid-cols-2 gap-8 bg-slate-900/80 border border-slate-800 rounded-2xl p-8 backdrop-blur shadow-2xl">
+        <div className={`w-full ${showDemoLogins ? 'max-w-4xl grid md:grid-cols-2 gap-8' : 'max-w-xl'} bg-slate-900/80 border border-slate-800 rounded-2xl p-8 backdrop-blur shadow-2xl`}>
         
         {/* Left Column: Direct Login */}
         <div className="flex flex-col justify-between">
@@ -111,12 +113,21 @@ export default function Login() {
                 <div className="relative">
                   <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
                   <input
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    className="w-full bg-slate-800/80 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 transition-colors"
+                    className="w-full bg-slate-800/80 border border-slate-700 rounded-lg pl-9 pr-10 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 transition-colors"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((visible) => !visible)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    aria-pressed={showPassword}
+                    className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-200 focus:outline-none focus:text-indigo-400 transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
               </div>
 
@@ -133,12 +144,12 @@ export default function Login() {
 
           <div className="mt-6 pt-4 border-t border-slate-800 text-xs text-slate-500 flex items-center space-x-1">
             <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>JWT Multi-Tenant RBAC Security Active</span>
+            {/* <span>JWT Multi-Tenant RBAC Security Active</span> */}
           </div>
         </div>
 
         {/* Right Column: 1-Click Persona Simulator */}
-        <div className="border-t md:border-t-0 md:border-l border-slate-800 pt-6 md:pt-0 md:pl-8 flex flex-col justify-between">
+        {showDemoLogins && <div className="border-t md:border-t-0 md:border-l border-slate-800 pt-6 md:pt-0 md:pl-8 flex flex-col justify-between">
           <div>
             <div className="flex items-center space-x-2 text-slate-200 font-semibold text-sm mb-1">
               <UserCheck className="w-4 h-4 text-indigo-400" />
@@ -168,10 +179,10 @@ export default function Login() {
             </div>
           </div>
 
-          <div className="mt-4 text-[11px] text-slate-500 font-mono text-center">
-            Default credentials for all: <code className="text-indigo-300">password123</code>
-          </div>
-        </div>
+          {/* <div className="mt-4 text-[11px] text-slate-500 font-mono text-center">
+            Default credentials for all: <code className="text-indigo-300">Password@123</code>
+          </div> */}
+        </div>}
 
       </div>
     </div>

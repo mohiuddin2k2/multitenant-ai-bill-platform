@@ -21,15 +21,29 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @Service
-@RequiredArgsConstructor
-@Slf4j
 public class BillService {
+
+    private static final Logger log = LoggerFactory.getLogger(BillService.class);
 
     private final BillRepository billRepository;
     private final BillAuditLogRepository auditLogRepository;
     private final UserRepository userRepository;
     private final AnomalyDetectionService anomalyDetectionService;
+
+    public BillService(
+            BillRepository billRepository,
+            BillAuditLogRepository auditLogRepository,
+            UserRepository userRepository,
+            AnomalyDetectionService anomalyDetectionService) {
+        this.billRepository = billRepository;
+        this.auditLogRepository = auditLogRepository;
+        this.userRepository = userRepository;
+        this.anomalyDetectionService = anomalyDetectionService;
+    }
 
     @Transactional(readOnly = true)
     public Page<BillDTO> getBills(Long tenantId, BillStatus status, Pageable pageable) {
@@ -40,6 +54,17 @@ public class BillService {
             billsPage = billRepository.findByTenantId(tenantId, pageable);
         }
         return billsPage.map(this::mapToDTO);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<BillDTO> getBillsForUser(Long tenantId, Long userId, String userRole, BillStatus status, Pageable pageable) {
+        if ("CLERK".equals(userRole)) {
+            Page<Bill> page = status == null
+                    ? billRepository.findByTenantIdAndAssignedToUserId(tenantId, userId, pageable)
+                    : billRepository.findByTenantIdAndAssignedToUserIdAndStatus(tenantId, userId, status, pageable);
+            return page.map(this::mapToDTO);
+        }
+        return getBills(tenantId, status, pageable);
     }
 
     @Transactional(readOnly = true)
@@ -129,17 +154,13 @@ public class BillService {
             throw new TenantViolationException("Cross-tenant mutation denied");
         }
 
-        // RBAC validation: Approvals & Rejections require APPROVER or ADMIN role
-        if ((updateDTO.getStatus() == BillStatus.APPROVED || updateDTO.getStatus() == BillStatus.REJECTED) &&
-            !("APPROVER".equalsIgnoreCase(userRole) || "ADMIN".equalsIgnoreCase(userRole))) {
-            throw new AccessDeniedException("Only users with role APPROVER or ADMIN are authorized to approve or reject bills");
-        }
+        BillStatus previousStatus = bill.getStatus();
+        validateWorkflowTransition(bill, previousStatus, updateDTO.getStatus(), userId, userRole);
 
         if (updateDTO.getStatus() == BillStatus.REJECTED && (updateDTO.getRejectionReason() == null || updateDTO.getRejectionReason().isBlank())) {
             throw new IllegalArgumentException("A rejection reason must be provided when rejecting a bill");
         }
 
-        BillStatus previousStatus = bill.getStatus();
         bill.setStatus(updateDTO.getStatus());
         if (updateDTO.getRejectionReason() != null) {
             bill.setRejectionReason(updateDTO.getRejectionReason());
@@ -158,6 +179,93 @@ public class BillService {
         auditLogRepository.save(auditLog);
 
         return mapToDTO(bill);
+    }
+
+    @Transactional
+    @CacheEvict(value = "dashboard-summary", key = "#tenantId")
+    public BillDTO assignToClerk(Long billId, Long tenantId, Long actorId, Long clerkUserId) {
+        Bill bill = billRepository.findById(billId)
+                .orElseThrow(() -> new ResourceNotFoundException("Bill not found with ID: " + billId));
+        if (!bill.getTenantId().equals(tenantId)) {
+            throw new TenantViolationException("Cross-tenant assignment denied");
+        }
+        User clerk = userRepository.findById(clerkUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("Clerk not found with ID: " + clerkUserId));
+        if (!clerk.getTenantId().equals(tenantId) || clerk.getRole() != Role.CLERK || !Boolean.TRUE.equals(clerk.getEnabled())) {
+            throw new IllegalArgumentException("Choose an enabled clerk in the active organization");
+        }
+        if (bill.getStatus() != BillStatus.PENDING && bill.getStatus() != BillStatus.IN_REVIEW
+                && bill.getStatus() != BillStatus.ASSIGNED_TO_CLERK) {
+            throw new IllegalArgumentException("Only unassigned or clerk-assigned bills can be assigned to a clerk");
+        }
+
+        bill.setAssignedToUserId(clerkUserId);
+        bill.setStatus(BillStatus.ASSIGNED_TO_CLERK);
+        bill = billRepository.save(bill);
+        saveWorkflowAudit(bill, tenantId, actorId, "ASSIGNED_TO_CLERK", "Bill assigned to " + clerk.getFullName());
+        return mapToDTO(bill);
+    }
+
+    @Transactional
+    @CacheEvict(value = "dashboard-summary", key = "#tenantId")
+    public BillDTO updateAssignedBillDetails(Long billId, Long tenantId, Long userId, BillCreateDTO dto) {
+        Bill bill = billRepository.findById(billId)
+                .orElseThrow(() -> new ResourceNotFoundException("Bill not found with ID: " + billId));
+        if (!bill.getTenantId().equals(tenantId)) {
+            throw new TenantViolationException("Cross-tenant mutation denied");
+        }
+        if (bill.getStatus() != BillStatus.ASSIGNED_TO_CLERK || !userId.equals(bill.getAssignedToUserId())) {
+            throw new AccessDeniedException("Only the assigned clerk can edit bill details before review");
+        }
+
+        bill.setInvoiceNumber(dto.getInvoiceNumber());
+        bill.setVendorName(dto.getVendorName());
+        bill.setVendorTaxId(dto.getVendorTaxId());
+        bill.setCategory(dto.getCategory());
+        bill.setBillDate(dto.getBillDate());
+        bill.setDueDate(dto.getDueDate());
+        bill.setCurrency(dto.getCurrency() != null ? dto.getCurrency() : "INR");
+        bill.setSubtotalAmount(dto.getSubtotalAmount() != null ? dto.getSubtotalAmount() : dto.getTotalAmount());
+        bill.setTaxAmount(dto.getTaxAmount() != null ? dto.getTaxAmount() : BigDecimal.ZERO);
+        bill.setTotalAmount(dto.getTotalAmount());
+        bill.setNotes(dto.getNotes());
+        bill.setFileUrl(dto.getFileUrl());
+        bill.setFileHash(dto.getFileHash());
+        bill = billRepository.save(bill);
+
+        saveWorkflowAudit(bill, tenantId, userId, "CLERK_DETAILS_UPDATED", "Assigned clerk reviewed and updated bill details");
+        return mapToDTO(bill);
+    }
+
+    private void validateWorkflowTransition(Bill bill, BillStatus current, BillStatus target, Long userId, String role) {
+        boolean allowed = false;
+        if (target == BillStatus.REJECTED) {
+            allowed = ("ASSISTANT_OFFICER".equals(role) && current == BillStatus.PENDING_ASSISTANT_REVIEW)
+                    || ("HIGHER_OFFICER".equals(role) && current == BillStatus.PENDING_HIGHER_REVIEW)
+                    || ("APPROVER".equals(role) && (current == BillStatus.PENDING || current == BillStatus.IN_REVIEW));
+        } else if ("CLERK".equals(role)) {
+            allowed = current == BillStatus.ASSIGNED_TO_CLERK && target == BillStatus.PENDING_ASSISTANT_REVIEW
+                    && userId.equals(bill.getAssignedToUserId());
+        } else if ("ASSISTANT_OFFICER".equals(role)) {
+            allowed = current == BillStatus.PENDING_ASSISTANT_REVIEW && target == BillStatus.PENDING_HIGHER_REVIEW;
+        } else if ("HIGHER_OFFICER".equals(role)) {
+            allowed = current == BillStatus.PENDING_HIGHER_REVIEW && target == BillStatus.APPROVED;
+        } else if ("ADMIN".equals(role)) {
+            allowed = current == BillStatus.APPROVED && target == BillStatus.PAID;
+        } else if ("APPROVER".equals(role)) {
+            // Keep the original demo approval path working for legacy accounts.
+            allowed = (current == BillStatus.PENDING || current == BillStatus.IN_REVIEW)
+                    && (target == BillStatus.APPROVED || target == BillStatus.REJECTED);
+        }
+        if (!allowed) {
+            throw new AccessDeniedException("This role cannot move the bill from " + current + " to " + target);
+        }
+    }
+
+    private void saveWorkflowAudit(Bill bill, Long tenantId, Long actorId, String action, String comment) {
+        BillAuditLog audit = BillAuditLog.builder().bill(bill).tenantId(tenantId)
+                .action(action).performedByUserId(actorId).comment(comment).build();
+        auditLogRepository.save(audit);
     }
 
     public BillDTO mapToDTO(Bill bill) {
@@ -190,6 +298,7 @@ public class BillService {
                 .id(bill.getId())
                 .tenantId(bill.getTenantId())
                 .submittedByUserId(bill.getSubmittedByUserId())
+                .assignedToUserId(bill.getAssignedToUserId())
                 .submittedByUserName(submitterName)
                 .invoiceNumber(bill.getInvoiceNumber())
                 .vendorName(bill.getVendorName())

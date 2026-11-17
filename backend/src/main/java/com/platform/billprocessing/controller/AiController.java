@@ -18,12 +18,16 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/ai")
-@RequiredArgsConstructor
 @Tag(name = "AI Extraction Engine", description = "Asynchronous Document Extraction, OCR and Anomaly Evaluation")
 public class AiController {
 
     private final AiBillExtractionService aiBillExtractionService;
     private final RateLimitingService rateLimitingService;
+
+    public AiController(AiBillExtractionService aiBillExtractionService, RateLimitingService rateLimitingService) {
+        this.aiBillExtractionService = aiBillExtractionService;
+        this.rateLimitingService = rateLimitingService;
+    }
 
     @PostMapping(value = "/extract-bill", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Submit bill PDF or image to async AI processing queue")

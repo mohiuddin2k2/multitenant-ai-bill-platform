@@ -15,11 +15,14 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/organizations")
-@RequiredArgsConstructor
 @Tag(name = "Organizations Hierarchy", description = "Parent and Sub-Organization Multi-Tenant Structure")
 public class OrganizationController {
 
     private final OrganizationService organizationService;
+
+    public OrganizationController(OrganizationService organizationService) {
+        this.organizationService = organizationService;
+    }
 
     @GetMapping
     @Operation(summary = "Get full organization tree structure")

@@ -15,19 +15,29 @@ import {
 } from 'lucide-react';
 
 export default function BillsList() {
-  const { isApprover, activeTenantId } = useAuth();
+  const { isApprover, activeTenantId, user } = useAuth();
   const [bills, setBills] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeStatus, setActiveStatus] = useState('');
   const [selectedBill, setSelectedBill] = useState(null);
+  const [editingBill, setEditingBill] = useState(null);
+  const [editForm, setEditForm] = useState(null);
   const [auditBill, setAuditBill] = useState(null);
   const [rejectingBill, setRejectingBill] = useState(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [clerks, setClerks] = useState([]);
+  const [clerkAssignments, setClerkAssignments] = useState({});
 
   useEffect(() => {
     fetchBills();
   }, [activeStatus, activeTenantId]);
+
+  useEffect(() => {
+    if (user?.role === 'ADMIN') {
+      api.get('/auth/users').then((res) => setClerks(res.data.filter((u) => u.role === 'CLERK' && u.enabled))).catch(console.error);
+    }
+  }, [activeTenantId, user?.role]);
 
   const fetchBills = () => {
     setLoading(true);
@@ -54,6 +64,65 @@ export default function BillsList() {
       fetchBills();
     } catch (err) {
       alert(err.response?.data?.message || 'Approval failed');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const advanceBill = async (billId, status, confirmation) => {
+    if (!window.confirm(confirmation)) return;
+    setActionLoading(true);
+    try {
+      await api.patch(`/bills/${billId}/status`, { status, comment: confirmation });
+      fetchBills();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Bill workflow update failed');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const assignBill = async (billId) => {
+    const clerkUserId = Number(clerkAssignments[billId]);
+    if (!clerkUserId) return alert('Select a clerk first.');
+    setActionLoading(true);
+    try {
+      await api.patch(`/admin/bills/${billId}/assign`, { clerkUserId });
+      fetchBills();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Bill assignment failed');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const beginEdit = (bill) => {
+    setEditingBill(bill);
+    setEditForm({
+      invoiceNumber: bill.invoiceNumber || '', vendorName: bill.vendorName || '',
+      vendorTaxId: bill.vendorTaxId || '', category: bill.category || '',
+      billDate: bill.billDate || '', dueDate: bill.dueDate || '', currency: bill.currency || 'INR',
+      subtotalAmount: bill.subtotalAmount ?? bill.totalAmount ?? '', taxAmount: bill.taxAmount ?? 0,
+      totalAmount: bill.totalAmount ?? '', notes: bill.notes || '', fileUrl: bill.fileUrl || '', fileHash: bill.fileHash || ''
+    });
+  };
+
+  const saveBillDetails = async (event) => {
+    event.preventDefault();
+    setActionLoading(true);
+    try {
+      await api.put(`/bills/${editingBill.id}`, {
+        ...editForm,
+        dueDate: editForm.dueDate || null,
+        subtotalAmount: Number(editForm.subtotalAmount),
+        taxAmount: Number(editForm.taxAmount),
+        totalAmount: Number(editForm.totalAmount)
+      });
+      setEditingBill(null);
+      setEditForm(null);
+      fetchBills();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Could not save bill details');
     } finally {
       setActionLoading(false);
     }
@@ -98,8 +167,13 @@ export default function BillsList() {
         return 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30';
       case 'PENDING':
         return 'bg-amber-500/15 text-amber-400 border-amber-500/30';
+      case 'ASSIGNED_TO_CLERK':
+        return 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30';
       case 'IN_REVIEW':
         return 'bg-sky-500/15 text-sky-400 border-sky-500/30';
+      case 'PENDING_ASSISTANT_REVIEW':
+      case 'PENDING_HIGHER_REVIEW':
+        return 'bg-sky-500/15 text-sky-300 border-sky-500/30';
       case 'REJECTED':
         return 'bg-rose-500/15 text-rose-400 border-rose-500/30';
       default:
@@ -122,6 +196,9 @@ export default function BillsList() {
             { id: '', label: 'All Bills' },
             { id: 'PENDING', label: 'Pending' },
             { id: 'IN_REVIEW', label: 'In Review' },
+            { id: 'ASSIGNED_TO_CLERK', label: 'Assigned' },
+            { id: 'PENDING_ASSISTANT_REVIEW', label: 'Assistant Review' },
+            { id: 'PENDING_HIGHER_REVIEW', label: 'Higher Review' },
             { id: 'APPROVED', label: 'Approved' },
             { id: 'REJECTED', label: 'Rejected' },
             { id: 'PAID', label: 'Paid' },
@@ -229,7 +306,47 @@ export default function BillsList() {
                         </button>
 
                         {/* Approver / Admin Actions */}
-                        {isApprover && (bill.status === 'PENDING' || bill.status === 'IN_REVIEW') && (
+                        {user?.role === 'ADMIN' && (bill.status === 'PENDING' || bill.status === 'IN_REVIEW' || bill.status === 'ASSIGNED_TO_CLERK') && (
+                          <>
+                            <select aria-label="Assign bill to clerk" value={clerkAssignments[bill.id] || bill.assignedToUserId || ''}
+                              onChange={(e) => setClerkAssignments({ ...clerkAssignments, [bill.id]: e.target.value })}
+                              className="max-w-36 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200">
+                              <option value="">Select clerk</option>
+                              {clerks.map((clerk) => <option key={clerk.id} value={clerk.id}>{clerk.fullName}</option>)}
+                            </select>
+                            <button onClick={() => assignBill(bill.id)} disabled={actionLoading}
+                              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-600/20 text-indigo-300 border border-indigo-500/30">Assign</button>
+                          </>
+                        )}
+                        {user?.role === 'CLERK' && bill.status === 'ASSIGNED_TO_CLERK' && Number(bill.assignedToUserId) === Number(user.id) && (
+                          <>
+                            <button onClick={() => beginEdit(bill)} disabled={actionLoading}
+                              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-700 text-slate-200 border border-slate-600">Check / edit</button>
+                            <button onClick={() => advanceBill(bill.id, 'PENDING_ASSISTANT_REVIEW', 'Submit bill to Assistant Officer for review?')} disabled={actionLoading}
+                              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-cyan-600/20 text-cyan-300 border border-cyan-500/30">Submit for review</button>
+                          </>
+                        )}
+                        {user?.role === 'ASSISTANT_OFFICER' && bill.status === 'PENDING_ASSISTANT_REVIEW' && (
+                          <>
+                            <button onClick={() => advanceBill(bill.id, 'PENDING_HIGHER_REVIEW', 'Forward bill to Higher Officer?')} disabled={actionLoading}
+                              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-sky-600/20 text-sky-300 border border-sky-500/30">Forward</button>
+                            <button onClick={() => setRejectingBill(bill)} disabled={actionLoading}
+                              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-rose-600/20 text-rose-400 border border-rose-500/30">Reject</button>
+                          </>
+                        )}
+                        {user?.role === 'HIGHER_OFFICER' && bill.status === 'PENDING_HIGHER_REVIEW' && (
+                          <>
+                            <button onClick={() => advanceBill(bill.id, 'APPROVED', 'Approve this bill for payment?')} disabled={actionLoading}
+                              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-600/20 text-emerald-400 border border-emerald-500/30">Approve</button>
+                            <button onClick={() => setRejectingBill(bill)} disabled={actionLoading}
+                              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-rose-600/20 text-rose-400 border border-rose-500/30">Reject</button>
+                          </>
+                        )}
+                        {user?.role === 'ADMIN' && bill.status === 'APPROVED' && (
+                          <button onClick={() => advanceBill(bill.id, 'PAID', 'Mark the approved bill as paid?')} disabled={actionLoading}
+                            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-600/20 text-indigo-300 border border-indigo-500/30">Mark paid</button>
+                        )}
+                        {user?.role === 'APPROVER' && isApprover && (bill.status === 'PENDING' || bill.status === 'IN_REVIEW') && (
                           <>
                             <button
                               onClick={() => handleApprove(bill.id)}
@@ -326,6 +443,42 @@ export default function BillsList() {
               <span className="text-xl font-extrabold text-white font-mono">{formatCurrency(selectedBill.totalAmount)}</span>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Clerk Bill Details Editor */}
+      {editingBill && editForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <form onSubmit={saveBillDetails} className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-4">
+            <div>
+              <h3 className="text-lg font-bold text-white">Review and complete bill details</h3>
+              <p className="text-xs text-slate-400">Invoice #{editingBill.invoiceNumber}. Save your checks before submitting it for review.</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {[
+                ['invoiceNumber', 'Invoice number', 'text'], ['vendorName', 'Vendor name', 'text'],
+                ['vendorTaxId', 'Vendor tax ID', 'text'], ['category', 'Category', 'text'],
+                ['billDate', 'Bill date', 'date'], ['dueDate', 'Due date', 'date'],
+                ['currency', 'Currency', 'text'], ['subtotalAmount', 'Subtotal', 'number'],
+                ['taxAmount', 'Tax amount', 'number'], ['totalAmount', 'Total amount', 'number']
+              ].map(([key, label, type]) => (
+                <label key={key} className="text-xs text-slate-300">{label}
+                  <input required={['invoiceNumber', 'vendorName', 'category', 'billDate', 'totalAmount'].includes(key)} type={type}
+                    step={type === 'number' ? '0.01' : undefined} value={editForm[key]}
+                    onChange={(e) => setEditForm({ ...editForm, [key]: e.target.value })}
+                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none" />
+                </label>
+              ))}
+            </div>
+            <label className="block text-xs text-slate-300">Notes
+              <textarea rows={3} value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none" />
+            </label>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => { setEditingBill(null); setEditForm(null); }} className="px-4 py-2 rounded-lg text-sm text-slate-300 hover:bg-slate-800">Cancel</button>
+              <button disabled={actionLoading} className="px-4 py-2 rounded-lg text-sm font-semibold bg-indigo-600 text-white disabled:opacity-50">{actionLoading ? 'Saving…' : 'Save details'}</button>
+            </div>
+          </form>
         </div>
       )}
 

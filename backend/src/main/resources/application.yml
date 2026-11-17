@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: ${PORT:8080}
   servlet:
     context-path: /api/v1
 
@@ -10,7 +10,7 @@ spring:
     active: dev
 
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/billplatform_db}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://${SPRING_DATASOURCE_HOST:localhost}:${SPRING_DATASOURCE_PORT:5432}/${SPRING_DATASOURCE_DB:billplatform_db}}
     username: ${SPRING_DATASOURCE_USERNAME:bill_user}
     password: ${SPRING_DATASOURCE_PASSWORD:bill_secure_password123}
     driver-class-name: org.postgresql.Driver
@@ -65,6 +65,8 @@ spring:
       max-request-size: 25MB
 
 app:
+  cors:
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:}
   jwt:
     secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
     expiration-ms: 86400000 # 24 hours

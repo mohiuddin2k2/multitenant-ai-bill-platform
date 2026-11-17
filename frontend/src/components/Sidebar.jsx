@@ -6,10 +6,13 @@ import {
   FileUp, 
   Sparkles, 
   Network, 
-  Gauge
+  Gauge,
+  Users
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export default function Sidebar() {
+  const { isAdmin } = useAuth();
   const navItems = [
     { to: '/', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/bills', label: 'Bills & Approvals', icon: Receipt },
@@ -18,6 +21,7 @@ export default function Sidebar() {
     { to: '/hierarchy', label: 'Tenant Hierarchy', icon: Network },
     { to: '/quotas', label: 'AI Quotas & Budget', icon: Gauge },
   ];
+  if (isAdmin) navItems.push({ to: '/users', label: 'User Management', icon: Users });
 
   return (
     <aside className="w-64 border-r border-slate-800 bg-slate-900/40 p-4 flex flex-col justify-between shrink-0">
@@ -53,9 +57,9 @@ export default function Sidebar() {
           <span>Tenant Barrier</span>
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
         </div>
-        <p className="text-[11px] leading-tight text-slate-400">
+        {/* <p className="text-[11px] leading-tight text-slate-400">
           Strict SQL & JWT isolation active on all query plans.
-        </p>
+        </p> */}
       </div>
     </aside>
   );

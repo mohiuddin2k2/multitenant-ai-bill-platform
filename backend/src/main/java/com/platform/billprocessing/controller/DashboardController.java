@@ -13,11 +13,14 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/dashboard")
-@RequiredArgsConstructor
 @Tag(name = "Dashboard & Analytics", description = "Tenant Overview, Processed vs Pending Analytics, Redis Cached")
 public class DashboardController {
 
     private final DashboardService dashboardService;
+
+    public DashboardController(DashboardService dashboardService) {
+        this.dashboardService = dashboardService;
+    }
 
     @GetMapping("/summary")
     @Operation(summary = "Get aggregated summary statistics for the active tenant")

@@ -21,16 +21,33 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import java.util.List;
+
 @Service
-@RequiredArgsConstructor
-@Slf4j
 public class AuthService {
+
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
 
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider tokenProvider;
     private final UserRepository userRepository;
     private final OrganizationRepository organizationRepository;
     private final PasswordEncoder passwordEncoder;
+
+    public AuthService(
+            AuthenticationManager authenticationManager,
+            JwtTokenProvider tokenProvider,
+            UserRepository userRepository,
+            OrganizationRepository organizationRepository,
+            PasswordEncoder passwordEncoder) {
+        this.authenticationManager = authenticationManager;
+        this.tokenProvider = tokenProvider;
+        this.userRepository = userRepository;
+        this.organizationRepository = organizationRepository;
+        this.passwordEncoder = passwordEncoder;
+    }
 
     public AuthResponse authenticate(AuthRequest request) {
         Authentication authentication = authenticationManager.authenticate(
@@ -89,16 +106,18 @@ public class AuthService {
 
         user = userRepository.save(user);
 
-        return UserDTO.builder()
-                .id(user.getId())
-                .tenantId(user.getTenantId())
-                .username(user.getUsername())
-                .email(user.getEmail())
-                .fullName(user.getFullName())
-                .role(user.getRole())
-                .enabled(user.getEnabled())
-                .createdAt(user.getCreatedAt())
-                .build();
+        return toUserDTO(user);
+    }
+
+    @Transactional(readOnly = true)
+    public List<UserDTO> getUsers(Long tenantId) {
+        return userRepository.findByTenantId(tenantId).stream().map(this::toUserDTO).toList();
+    }
+
+    private UserDTO toUserDTO(User user) {
+        return UserDTO.builder().id(user.getId()).tenantId(user.getTenantId())
+                .username(user.getUsername()).email(user.getEmail()).fullName(user.getFullName())
+                .role(user.getRole()).enabled(user.getEnabled()).createdAt(user.getCreatedAt()).build();
     }
 }
 

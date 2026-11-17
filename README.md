@@ -153,11 +153,13 @@ The login screen features **1-click instant login buttons** for every persona:
 
 | Persona | Email / Username | Default Password | Role | Tenant Organization | Capabilities |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **HQ Global Admin** | `admin@shaksham.com` | `password123` | `ADMIN` | Shaksham Global (Tenant #1) | Full multi-tenant visibility, quota adjustments, tenant override switcher |
-| **North Approver** | `approver_north@shaksham.com` | `password123` | `APPROVER` | North Division (Tenant #2) | Review, approve, and reject North bills with mandatory audit notes |
-| **North Clerk** | `clerk_north@shaksham.com` | `password123` | `CLERK` | North Division (Tenant #2) | Upload invoices, run AI extraction, submit bills |
-| **South Approver** | `approver_south@shaksham.com` | `password123` | `APPROVER` | South Operations (Tenant #3) | Approvals isolated strictly to South bills |
-| **South Clerk** | `clerk_south@shaksham.com` | `password123` | `CLERK` | South Operations (Tenant #3) | Ingestion isolated strictly to South bills |
+| **HQ Global Admin** | `admin@shaksham.com` | `Password@123` | `ADMIN` | Shaksham Global (Tenant #1) | Full multi-tenant visibility, user management, and tenant switching |
+| **North Approver** | `approver_north@shaksham.com` | `Password@123` | `APPROVER` | North Division (Tenant #2) | Legacy demo approval account |
+| **North Clerk** | `clerk_north@shaksham.com` | `Password@123` | `CLERK` | North Division (Tenant #2) | Upload invoices and process assigned bills |
+| **South Approver** | `approver_south@shaksham.com` | `Password@123` | `APPROVER` | South Operations (Tenant #3) | Legacy demo approval account |
+| **South Clerk** | `clerk_south@shaksham.com` | `Password@123` | `CLERK` | South Operations (Tenant #3) | Upload invoices and process assigned bills |
+
+Create Assistant Officer and Higher Officer accounts from the admin **User Management** page. The demo password reset is applied once by Flyway migration V4 on each database.
 
 ---
 

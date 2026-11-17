@@ -15,15 +15,21 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @Service
-@RequiredArgsConstructor
-@Slf4j
 public class TenantQuotaService {
 
+    private static final Logger log = LoggerFactory.getLogger(TenantQuotaService.class);
     private final TenantQuotaRepository tenantQuotaRepository;
 
     @Value("${app.ai.cost-per-1k-tokens:0.00015}")
     private double costPer1kTokens;
+
+    public TenantQuotaService(TenantQuotaRepository tenantQuotaRepository) {
+        this.tenantQuotaRepository = tenantQuotaRepository;
+    }
 
     @Transactional(readOnly = true)
     public TenantQuotaDTO getQuota(Long tenantId) {

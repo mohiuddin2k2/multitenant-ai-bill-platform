@@ -21,13 +21,21 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/bills")
-@RequiredArgsConstructor
 @Tag(name = "Bills Management", description = "Multi-Tenant Bill Lifecycle, Submissions, Approvals and NL Search")
 public class BillController {
 
     private final BillService billService;
     private final NaturalLanguageQueryService naturalLanguageQueryService;
     private final RateLimitingService rateLimitingService;
+
+    public BillController(
+            BillService billService,
+            NaturalLanguageQueryService naturalLanguageQueryService,
+            RateLimitingService rateLimitingService) {
+        this.billService = billService;
+        this.naturalLanguageQueryService = naturalLanguageQueryService;
+        this.rateLimitingService = rateLimitingService;
+    }
 
     @GetMapping
     @Operation(summary = "Get paginated bills isolated to current tenant")
@@ -37,7 +45,7 @@ public class BillController {
 
         Long tenantId = TenantContext.getTenantId();
         checkRateLimit(tenantId);
-        Page<BillDTO> bills = billService.getBills(tenantId, status, pageable);
+        Page<BillDTO> bills = billService.getBillsForUser(tenantId, TenantContext.getUserId(), TenantContext.getUserRole(), status, pageable);
         return ResponseEntity.ok(bills);
     }
 
@@ -59,6 +67,16 @@ public class BillController {
 
         BillDTO created = billService.createBill(createDTO, tenantId, userId);
         return new ResponseEntity<>(created, HttpStatus.CREATED);
+    }
+
+    @PutMapping("/{id}")
+    @Operation(summary = "Update bill details while it is assigned to the current clerk")
+    public ResponseEntity<BillDTO> updateAssignedBill(
+            @PathVariable Long id,
+            @Valid @RequestBody BillCreateDTO updateDTO) {
+        BillDTO updated = billService.updateAssignedBillDetails(
+                id, TenantContext.getTenantId(), TenantContext.getUserId(), updateDTO);
+        return ResponseEntity.ok(updated);
     }
 
     @PatchMapping("/{id}/status")

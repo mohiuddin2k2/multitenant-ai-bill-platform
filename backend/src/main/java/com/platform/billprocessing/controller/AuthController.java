@@ -15,17 +15,21 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.HashMap;
 import java.util.Map;
 
 @RestController
 @RequestMapping("/auth")
-@RequiredArgsConstructor
 @Tag(name = "Authentication", description = "JWT Token Generation and User Onboarding")
 public class AuthController {
 
     private final AuthService authService;
+
+    public AuthController(AuthService authService) {
+        this.authService = authService;
+    }
 
     @PostMapping("/login")
     @Operation(summary = "Authenticate user and issue multi-tenant JWT token")
@@ -35,10 +39,17 @@ public class AuthController {
     }
 
     @PostMapping("/register")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Register a new user within a tenant")
     public ResponseEntity<UserDTO> register(@Valid @RequestBody RegisterRequest request) {
         UserDTO user = authService.register(request);
         return new ResponseEntity<>(user, HttpStatus.CREATED);
+    }
+
+    @GetMapping("/users")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<java.util.List<UserDTO>> getUsers() {
+        return ResponseEntity.ok(authService.getUsers(TenantContext.getTenantId()));
     }
 
     @GetMapping("/me")

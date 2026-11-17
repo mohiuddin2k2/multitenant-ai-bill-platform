@@ -28,10 +28,13 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @Service
-@RequiredArgsConstructor
-@Slf4j
 public class NaturalLanguageQueryService {
+
+    private static final Logger log = LoggerFactory.getLogger(NaturalLanguageQueryService.class);
 
     private final BillRepository billRepository;
     private final BillService billService;
@@ -42,6 +45,15 @@ public class NaturalLanguageQueryService {
 
     @Value("${app.ai.mock-fallback-enabled:true}")
     private boolean mockFallbackEnabled;
+
+    public NaturalLanguageQueryService(
+            BillRepository billRepository,
+            BillService billService,
+            ObjectMapper objectMapper) {
+        this.billRepository = billRepository;
+        this.billService = billService;
+        this.objectMapper = objectMapper;
+    }
 
     public NaturalLanguageQueryResponseDTO executeNaturalLanguageQuery(Long tenantId, String userPrompt) {
         log.info("Processing NL query for Tenant {}: '{}'", tenantId, userPrompt);

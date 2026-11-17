@@ -15,12 +15,24 @@ import {
 } from 'lucide-react';
 import AnomalyBadge from '../components/AnomalyBadge';
 
+const sampleInvoices = [
+  { file: 'tcs_it_services_normal.pdf', title: 'TCS IT services', expected: 'Normal · INR 85,000' },
+  { file: 'reliance_power_normal.pdf', title: 'Reliance Power', expected: 'Normal · INR 48,750' },
+  { file: 'airtel_fiber_normal.pdf', title: 'Airtel Fiber', expected: 'Normal · INR 32,000' },
+  { file: 'amazon_cloud_normal.pdf', title: 'Amazon cloud', expected: 'Normal · INR 195,000' },
+  { file: 'office_depot_normal.pdf', title: 'Office Depot', expected: 'Normal · INR 64,500' },
+  { file: 'dell_high_value_anomaly.pdf', title: 'Dell high value', expected: 'HIGH anomaly · INR 750,000' },
+  { file: 'dell_second_high_value_anomaly.pdf', title: 'Dell high value 2', expected: 'HIGH anomaly · INR 750,000' },
+  { file: 'duplicate_upload_same_file.pdf', title: 'Duplicate check', expected: 'Upload after the TCS sample to detect identical file' },
+];
+
 export default function UploadBill() {
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [jobStatus, setJobStatus] = useState(null);
   const [extractedData, setExtractedData] = useState(null);
   const [anomalyAnalysis, setAnomalyAnalysis] = useState(null);
+  const [fileHash, setFileHash] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [notes, setNotes] = useState('');
   const navigate = useNavigate();
@@ -37,6 +49,7 @@ export default function UploadBill() {
     setJobStatus({ status: 'PENDING' });
     setExtractedData(null);
     setAnomalyAnalysis(null);
+    setFileHash(null);
 
     const formData = new FormData();
     formData.append('file', file);
@@ -64,6 +77,7 @@ export default function UploadBill() {
           setUploading(false);
           setExtractedData(res.data.extractedData);
           setAnomalyAnalysis(res.data.anomalyAnalysis);
+          setFileHash(res.data.fileHash);
         } else if (res.data.status === 'FAILED') {
           clearInterval(interval);
           setUploading(false);
@@ -92,6 +106,7 @@ export default function UploadBill() {
         taxAmount: extractedData.taxAmount,
         totalAmount: extractedData.totalAmount,
         aiConfidenceScore: extractedData.confidenceScore,
+        fileHash,
         notes: notes,
         items: extractedData.items || []
       };
@@ -117,6 +132,25 @@ export default function UploadBill() {
           Upload any PDF invoice or image. Spring AI extracts line items, validates tax data, and triggers anomaly detection in the background.
         </p>
       </div>
+
+      <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5">
+        <div className="flex items-center gap-2 mb-3">
+          <FileText className="h-4 w-4 text-indigo-400" />
+          <h2 className="text-sm font-semibold text-white">Sample invoices</h2>
+          <span className="text-xs text-slate-500">Download, then choose the file below.</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+          {sampleInvoices.map((sample) => (
+            <a key={sample.file} href={`/sample-bills/${sample.file}`} download
+              className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 hover:border-indigo-500/50 transition-colors">
+              <span className="block text-xs font-semibold text-slate-200">{sample.title}</span>
+              <span className="mt-1 block text-[11px] text-slate-400">{sample.expected}</span>
+              <span className="mt-2 block text-[10px] text-indigo-300">Download PDF</span>
+            </a>
+          ))}
+        </div>
+        <p className="mt-3 text-[11px] text-slate-500">For duplicate detection, submit the TCS sample first, then upload the duplicate-check file. All invoices are fictional demos.</p>
+      </section>
 
       {/* File Dropzone */}
       <div className="p-8 border-2 border-dashed border-slate-700 hover:border-indigo-500/60 rounded-2xl bg-slate-900/40 text-center transition-all">

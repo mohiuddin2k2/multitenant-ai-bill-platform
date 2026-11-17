@@ -14,12 +14,19 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @Service
-@RequiredArgsConstructor
-@Slf4j
 public class AnomalyDetectionService {
 
+    private static final Logger log = LoggerFactory.getLogger(AnomalyDetectionService.class);
+
     private final BillRepository billRepository;
+
+    public AnomalyDetectionService(BillRepository billRepository) {
+        this.billRepository = billRepository;
+    }
 
     public AnomalyAnalysisDTO analyzeBill(Long tenantId, String vendorName, String invoiceNumber, BigDecimal totalAmount, String fileHash) {
         List<String> reasons = new ArrayList<>();

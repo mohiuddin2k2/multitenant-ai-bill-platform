@@ -19,14 +19,26 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @Service
-@RequiredArgsConstructor
-@Slf4j
 public class DashboardService {
+
+    private static final Logger log = LoggerFactory.getLogger(DashboardService.class);
 
     private final BillRepository billRepository;
     private final OrganizationRepository organizationRepository;
     private final TenantQuotaService tenantQuotaService;
+
+    public DashboardService(
+            BillRepository billRepository,
+            OrganizationRepository organizationRepository,
+            TenantQuotaService tenantQuotaService) {
+        this.billRepository = billRepository;
+        this.organizationRepository = organizationRepository;
+        this.tenantQuotaService = tenantQuotaService;
+    }
 
     @Transactional(readOnly = true)
     @Cacheable(value = "dashboard-summary", key = "#tenantId", unless = "#result == null")

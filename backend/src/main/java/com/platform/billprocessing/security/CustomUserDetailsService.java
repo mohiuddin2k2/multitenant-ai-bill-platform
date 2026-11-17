@@ -11,11 +11,15 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 @Service
-@RequiredArgsConstructor
 public class CustomUserDetailsService implements UserDetailsService {
 
     private final UserRepository userRepository;
     private final OrganizationRepository organizationRepository;
+
+    public CustomUserDetailsService(UserRepository userRepository, OrganizationRepository organizationRepository) {
+        this.userRepository = userRepository;
+        this.organizationRepository = organizationRepository;
+    }
 
     @Override
     public UserDetails loadUserByUsername(String usernameOrEmail) throws UsernameNotFoundException {

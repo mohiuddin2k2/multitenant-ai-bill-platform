@@ -14,11 +14,14 @@ import java.math.BigDecimal;
 
 @RestController
 @RequestMapping("/quotas")
-@RequiredArgsConstructor
 @Tag(name = "AI Cost Capping & Quotas", description = "Tenant AI Token Budgets and Cost Safeguards")
 public class TenantQuotaController {
 
     private final TenantQuotaService tenantQuotaService;
+
+    public TenantQuotaController(TenantQuotaService tenantQuotaService) {
+        this.tenantQuotaService = tenantQuotaService;
+    }
 
     @GetMapping("/my-quota")
     @Operation(summary = "Get current tenant AI usage, cost cap and throttle status")

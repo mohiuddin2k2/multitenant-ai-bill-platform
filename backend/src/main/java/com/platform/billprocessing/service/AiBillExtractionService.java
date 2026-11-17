@@ -29,11 +29,13 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @Service
-@RequiredArgsConstructor
-@Slf4j
 public class AiBillExtractionService {
 
+    private static final Logger log = LoggerFactory.getLogger(AiBillExtractionService.class);
     private final AiExtractionJobRepository aiExtractionJobRepository;
     private final TenantQuotaService tenantQuotaService;
     private final AnomalyDetectionService anomalyDetectionService;
@@ -44,6 +46,17 @@ public class AiBillExtractionService {
 
     @Value("${app.ai.mock-fallback-enabled:true}")
     private boolean mockFallbackEnabled;
+
+    public AiBillExtractionService(
+            AiExtractionJobRepository aiExtractionJobRepository,
+            TenantQuotaService tenantQuotaService,
+            AnomalyDetectionService anomalyDetectionService,
+            ObjectMapper objectMapper) {
+        this.aiExtractionJobRepository = aiExtractionJobRepository;
+        this.tenantQuotaService = tenantQuotaService;
+        this.anomalyDetectionService = anomalyDetectionService;
+        this.objectMapper = objectMapper;
+    }
 
     public AiJobStatusDTO initiateAsyncExtraction(MultipartFile file, Long tenantId, Long userId) {
         tenantQuotaService.validateQuotaAvailable(tenantId);
@@ -129,12 +142,14 @@ public class AiBillExtractionService {
 
         ExtractedBillDataDTO extractedData = null;
         AnomalyAnalysisDTO anomalyAnalysis = null;
+        String fileHash = null;
 
         if (job.getStatus() == JobStatus.COMPLETED && job.getExtractedDataJson() != null) {
             try {
                 Map<String, Object> map = objectMapper.readValue(job.getExtractedDataJson(), Map.class);
                 extractedData = objectMapper.convertValue(map.get("extractedData"), ExtractedBillDataDTO.class);
                 anomalyAnalysis = objectMapper.convertValue(map.get("anomalyAnalysis"), AnomalyAnalysisDTO.class);
+                fileHash = Objects.toString(map.get("fileHash"), null);
             } catch (Exception e) {
                 log.warn("Failed to parse extracted JSON for job {}: {}", jobId, e.getMessage());
             }
@@ -144,6 +159,7 @@ public class AiBillExtractionService {
                 .jobId(job.getId())
                 .status(job.getStatus())
                 .filename(job.getFilename())
+                .fileHash(fileHash)
                 .extractedData(extractedData)
                 .anomalyAnalysis(anomalyAnalysis)
                 .tokensConsumed(job.getTokensConsumed())
@@ -221,6 +237,9 @@ public class AiBillExtractionService {
 
         String lower = (text != null ? text.toLowerCase() : "") + " " + filename.toLowerCase();
 
+        String printedInvoiceNumber = findGroup(text, "(?im)\\bInvoice\\s*(?:Number|No\\.?|#)\\s*[:#-]\\s*([A-Z0-9-]+)");
+        if (printedInvoiceNumber != null) invoiceNum = printedInvoiceNumber;
+
         if (lower.contains("reliance") || lower.contains("power") || lower.contains("electric")) {
             vendor = "Reliance Power Ltd";
             category = "Utilities";
@@ -258,6 +277,15 @@ public class AiBillExtractionService {
             taxId = "29AABCO1234B1Z5";
         }
 
+        BigDecimal printedSubtotal = findAmount(text, "Subtotal");
+        BigDecimal printedTax = findAmount(text, "GST");
+        BigDecimal printedTotal = findAmount(text, "Total");
+        if (printedSubtotal != null) subtotal = printedSubtotal;
+        if (printedTax != null) tax = printedTax;
+        if (printedTotal != null) total = printedTotal;
+        LocalDate billDate = findDate(text, "Invoice Date|Bill Date");
+        LocalDate dueDate = findDate(text, "Due Date|Payment Due Date");
+
         List<BillItemDTO> items = List.of(
                 BillItemDTO.builder()
                         .description("Primary Service Provisioning - " + vendor)
@@ -272,8 +300,8 @@ public class AiBillExtractionService {
                 .vendorName(vendor)
                 .vendorTaxId(taxId)
                 .category(category)
-                .billDate(LocalDate.now().minusDays(2))
-                .dueDate(LocalDate.now().plusDays(28))
+                .billDate(billDate != null ? billDate : LocalDate.now().minusDays(2))
+                .dueDate(dueDate != null ? dueDate : LocalDate.now().plusDays(28))
                 .currency("INR")
                 .subtotalAmount(subtotal)
                 .taxAmount(tax)
@@ -281,6 +309,32 @@ public class AiBillExtractionService {
                 .confidenceScore(new BigDecimal("98.5"))
                 .items(items)
                 .build();
+    }
+
+    private String findGroup(String text, String regex) {
+        if (text == null) return null;
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(regex).matcher(text);
+        return matcher.find() ? matcher.group(1).trim() : null;
+    }
+
+    private BigDecimal findAmount(String text, String label) {
+        String value = findGroup(text, "(?im)\\b" + label + "\\s*:\\s*(?:INR|Rs\\.?|₹)?\\s*([0-9,]+(?:\\.[0-9]{1,2})?)");
+        if (value == null) return null;
+        try {
+            return new BigDecimal(value.replace(",", ""));
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    private LocalDate findDate(String text, String labels) {
+        String value = findGroup(text, "(?im)\\b(?:" + labels + ")\\s*:\\s*(\\d{4}-\\d{2}-\\d{2})");
+        if (value == null) return null;
+        try {
+            return LocalDate.parse(value);
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private String calculateSha256(byte[] data) throws Exception {
